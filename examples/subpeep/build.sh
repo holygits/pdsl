@@ -5,4 +5,4 @@
 # under target/release/wasm32-unknown-unknown/ in the cwd.
 
 cargo +nightly build --release --target=wasm32-unknown-unknown --verbose
-wasm-build target enyzme --target-runtime=substrate --final=adder --save-raw=./target/enzyme-deployed.wasm --target wasm32-unknown-unknown
+wasm-build target subpeep --target-runtime=substrate --final=subpeep --save-raw=./target/subpeep-deployed.wasm --target wasm32-unknown-unknown

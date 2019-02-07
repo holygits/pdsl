@@ -222,7 +222,7 @@ where
 }
 
 /// The result of a slot probe.
-enum ProbeSlot {
+pub(crate) enum ProbeSlot {
 	/// The probed slot is empty or removed.
 	Vacant(u32),
 	/// The probed slot is occupied.
@@ -231,7 +231,7 @@ enum ProbeSlot {
 
 impl ProbeSlot {
 	/// Returns the index of the probe slot.
-	fn index(&self) -> u32 {
+	pub(crate) fn index(&self) -> u32 {
 		match self {
 			| ProbeSlot::Vacant(index)
 			| ProbeSlot::Occupied(index) => *index
