@@ -3,7 +3,6 @@ use crate::storage::{
     self,
     alloc::{AllocateUsing, Initialize},
     chunk::SyncChunk,
-    hash_map::ProbeSlot,
     Allocator, Flush,
 };
 
@@ -96,7 +95,7 @@ where
     /// Returns Ok(()) on success or `SetError::Exists` is if the element exists
     pub fn add(&mut self, key: K) -> Result<(), SetError> {
         match self.probe_inserting(&key) {
-            Some(ProbeSlot::Occupied(probe_index)) => Err(SetError::Exists),
+            Some(ProbeSlot::Occupied(_)) => Err(SetError::Exists),
             Some(ProbeSlot::Vacant(probe_index)) => {
                 self.len.set(self.len() + 1);
                 self.members.set(probe_index, key);
@@ -196,7 +195,7 @@ where
     ///
     /// The key may be any borrowed form of the sets's key type,
     /// but Hash and Eq on the borrowed form must match those for the key type.
-    pub fn remove<Q>(&mut self, key: &Q) -> Option<V>
+    pub fn remove<Q>(&mut self, key: &Q) -> Option<K>
     where
         K: Borrow<Q>,
         Q: Hash + Eq + ?Sized,
@@ -207,7 +206,7 @@ where
         );
         if let Some(elem) = self.members.take(probe_index) {
             self.len.set(self.len() - 1);
-            return elem;
+            return Some(elem);
         }
         None
     }
@@ -216,12 +215,27 @@ where
     ///
     /// The key may be any borrowed form of the set's type,
     /// but Hash and Eq on the borrowed form must match those for the key type.
-    fn contains<Q>(&self, key: &Q) -> bool
+    pub fn contains<Q>(&self, key: &Q) -> bool
     where
         K: Borrow<Q>,
         Q: Hash + Eq + ?Sized,
     {
-        self.probe_inspecting(key).is_some()
+        self.get(key).is_some()
+    }
+
+    /// Returns an immutable reference to the value corresponding to the key.
+    ///
+    /// The key may be any borrowed form of the map's key type,
+    /// but Hash and Eq on the borrowed form must match those for the key type.
+    fn get<Q>(&self, key: &Q) -> Option<&K>
+    where
+        K: Borrow<Q>,
+        Q: Hash + Eq + ?Sized,
+    {
+        if let Some(slot) = self.probe_inspecting(key) {
+            return self.members.get(slot);
+        }
+        None
     }
 }
 
@@ -240,15 +254,52 @@ where
     }
 }
 
-impl<'a, K, Q: ?Sized> core::ops::IndexMut<&'a Q> for HashSet<K>
-where
-    K: Eq + Hash + Borrow<Q> + parity_codec::Codec,
-    Q: Eq + Hash,
-{
-    fn index_mut(&mut self, index: &Q) -> &mut Self::Output {
-        self.get_mut(index).expect(
-            "[pdsl_core::HashSet::index_mut] Error: \
-             expected `index` to be within bounds",
-        )
+//
+// Duplicate utility functions
+//
+
+/// The result of a slot probe.
+pub(crate) enum ProbeSlot {
+    /// The probed slot is empty or removed.
+    Vacant(u32),
+    /// The probed slot is occupied.
+    Occupied(u32),
+}
+
+impl ProbeSlot {
+    /// Returns the index of the probe slot.
+    pub(crate) fn index(&self) -> u32 {
+        match self {
+            ProbeSlot::Vacant(index) | ProbeSlot::Occupied(index) => *index,
+        }
     }
+}
+
+/// Converts the given bytes into a `u32` value.
+///
+/// The first byte in the array will be the most significant byte.
+fn bytes4_to_u32(bytes: [u8; 4]) -> u32 {
+    let mut res = 0;
+    res |= (bytes[0] as u32) << 24;
+    res |= (bytes[1] as u32) << 16;
+    res |= (bytes[2] as u32) << 8;
+    res |= (bytes[3] as u32) << 0;
+    res
+}
+
+/// Converts the given slice into an array with fixed size of 4.
+///
+/// Returns `None` if the slice's length is not 4.
+fn slice_as_array4<T>(bytes: &[T]) -> Option<[T; 4]>
+where
+    T: Default + Copy,
+{
+    if bytes.len() != 4 {
+        return None;
+    }
+    let mut array = [T::default(); 4];
+    for i in 0..4 {
+        array[i] = bytes[i];
+    }
+    Some(array)
 }

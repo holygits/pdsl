@@ -96,6 +96,10 @@ pub use self::{
 			self,
 			Vec,
 		},
+		hash_set::{
+			self,
+			HashSet,
+		},
 		hash_map::{
 			self,
 			HashMap,
